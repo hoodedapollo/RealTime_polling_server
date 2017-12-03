@@ -1,0 +1,152 @@
+// make sure that task_4 and task_5 are run as soon as the polling server signal the condition variable
+// --> give the task_4 and task_5 maximum priority so that they run as soon as they are called by
+// the polling server
+
+// the code could be improved if the previous elements of the queque are cleared as soon as the next
+// task in the queque is run (pay attention because you need also to manage indeces very carefully if
+// you really want to optimize the buffere utilization) 
+
+#DEFINE BUFFER 100
+#DEFINE TASK_4 1
+#DEFINE TASK_5 2
+#DEFINE CAPACITY 100000000000; // still to be  evaluated
+
+
+
+//===================== Global variables ====================================
+
+int i = 0; // "pointer" to the first empty element of the queque
+int queque[BUFFER];
+
+//====================== TASK_1 ============================================
+
+if (uno == 0)
+{
+        pthread_mutex_lock(&queque_mutex);     // the variable queque is shared among task_1 and 
+                                               // polling_server_task so it must be protected with a mutex
+
+        queque[i] = TASK_4;                    // element of the queque "pointed" by i updated according 
+                                               // to the arrival of a specific aperiodic task (task_4 in 
+                                               // this case)
+
+        pthread_mutex_unlock(&queque_mutex);   // after the queque is updated we can relase the mutex in
+                                               // charge of protecting it
+
+        pthread_mutex_lock(&i_mutex);          // i is another variable shared between task_1 and 
+                                               // polling_server_task and must be protected
+
+        i+=;                                   // after a new tak is added to the queque we must update
+                                               // the i index in order to have it stil pointing to the 
+                                               // first empty element of the queque
+        pthread_mutex_unlock(&i_mutex);
+}
+
+if (uno == 1)
+{
+        pthread_mutex_lock(&queque_mutex);
+        queque[i] = TASK_5;                 
+        pthread_mutex_unlock(&queque_mutex);
+                                     
+        pthread_mutex_lock(&j_mutex);
+        i+=;
+        pthread_mutex_unlock(&j_mutex);
+}
+
+//========================== TASK_POLLING_SERVER_CODE ==========================================
+
+//Local Variables
+
+int j = 0;                     // "pointer" to the element of the queque that is going to run next
+
+float Capacity = CAPACITY;     // computational time reserved by the polling server
+
+float Capacity_left;           // computational time available to the current execution of the polling server to 
+                               // to run aperiodic tasks.
+ 
+Capacity_left = CAPACITY; // at the beginning of each execution of the polling server the available
+                          // capacity it's equal to the total capacity
+
+
+
+// As long as there are task in the queque and there is capacity left to run at least the task
+// that requires less capacity run the task
+
+while (queue[j] == TASK_4 || queue [j] == TASK_5)  
+{
+        
+        if (queue[j] == TASK_4 && Capacity_left >=  C_task_4) // if the element in the queque is task_4
+                                                                // and there is enough capcity left to
+                                                                // run task_4 signal task_4 to run 
+        {
+                pthread_mutex_lock(&mutex_task_4);
+                pthread_cond_signal(&cond_task_4);
+                pthread_mutex_unlock(&mutex_task_4);
+                
+                // increase the index of the queque, it's important to update the index of the queque 
+                // before updating the capacity left because the we can exit the loop due to conditions
+                // related to both queque and capacity, but we want to know in particular if we exit
+                // due to the queque in order to initialize it so that task 1 update the queque from the 
+                // beginning of the queque. In this way we optimize the use of the queque buffer size. 
+  
+                                  
+                j+=;                                            // update the index of the queque                                          
+                
+                Capacity_left = Capacity_left - C_task_4;       // reduce the capacity left according
+                                                                // to task_4 computational time
+        }
+
+
+        else if (queue[j] == TASK_5 && Capacity_left >= C_task_5)
+        {
+                pthread_mutex_lock(&mutex_task_5);
+                pthread_cond_signal(&cond_task_5);
+                pthread_mutex_unlock(&mutex_task_5);
+        
+                j+=;
+
+                Capacity_left = Capacity_left - C_task_5;       // reduce the capacity left according
+                                                                // to task_5 computational time
+        }
+        else 
+        {
+        break;  // in the case there is capacity left to run the task that requires the leat amount
+                // of computational time but the task in the queque that must be runned 
+                // requires more computational time than it is available, we need to forcefully exit the 
+                // the loop otherwise we will be stuck inside of it: there is a valid element in the
+                // queque but we cannot run it so the pointer j is never going to change neither  
+                // the capacity left is going to be updated, 
+        }
+
+       
+}
+
+// clear the queque and initialize its indexes only if there are no more valid element in the queque,
+// if the capacity left in not sufficient to run more aperiodic task, then, during the next execution of
+// the polling server periodic task,  you want the queque to start from the exact point it stopped
+
+if (queque[j] != TASK_4 && queque [j] != TASK_5) // when there are no more valid element in the queque  
+{
+
+    // delete the queque (fill it with zeroes up to the last valid element in the queque)
+
+    pthread_mutex_lock(&queque_mutex); 
+    for (int k = 1; k < j; k++)
+    {
+        queque[k] = 0;
+    }
+    pthread_mutex_unlock(&queque_mutex); 
+
+    // initialize the polling server queque pointer 
+    j = 0;
+
+    // initialize the task_1 queque pointer
+
+    pthread_mutex_lock(&i_mutex); // variable is shared between task_1 and task_polling_server so
+                                  // it must be protected with a mutex      
+    i = 0;
+    pthread_mutex_unlock(&i_mutex);
+}
+
+// refill the capacity for next execution of the task_polling_server
+
+Capacity_left = Capacity
