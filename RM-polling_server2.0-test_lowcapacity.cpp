@@ -380,7 +380,7 @@ void *task1( void *ptr)
 
                 long int timetowait= 1000*((next_arrival_time[1].tv_sec - ora.tv_sec)*1000000
                                 +(next_arrival_time[1].tv_usec-ora.tv_usec)); //  time interval between now and the next arrival time 
-                if (timetowait <1)
+                if (timetowait < 0)
                         missed_deadlines[1]++;
 
                 waittime.tv_sec = timetowait/1000000000;
