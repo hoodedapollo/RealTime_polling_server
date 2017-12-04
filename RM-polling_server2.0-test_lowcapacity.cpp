@@ -90,8 +90,8 @@ int main()
                 gettimeofday(&timeval1, &timezone1);
                 if (i==0)
                 {
-                        printf("Polling server"); fflush(stdout);
                         WCET[i] = CAPACITY;
+                        printf("\nPolling server Worst Case Execution Time = %ld \n", WCET[i]); fflush(stdout);
                 }
                 else
                 {
@@ -112,8 +112,8 @@ int main()
 
                         WCET[i]= 1000*((timeval2.tv_sec - timeval1.tv_sec)*1000000
                                         +(timeval2.tv_usec-timeval1.tv_usec));
+                        printf("\nTask %d Worst Case Execution Time = %ld \n", i, WCET[i]); fflush(stdout);
                 }
-                printf("\nWorst Case Execution Time %d=%ld \n", i, WCET[i]); fflush(stdout);
         }
 
         C_task_4 = WCET[4];
@@ -220,7 +220,8 @@ void polling_server_code()
                 else
                 {
 
-                        printf("!!!!! NOT ENOUGH CAPACITY LEFT !!!!!\n  Element left in the queue -->"); fflush(stdout);
+                        printf("        !!!!! NOT ENOUGH CAPACITY LEFT !!!!!\n"); fflush(stdout);          
+                        printf("            Elements left in the queue -->"); fflush(stdout);
 
                         int i = j;
                         while(queue[i] == TASK_4 || queue[i] == TASK_5)
