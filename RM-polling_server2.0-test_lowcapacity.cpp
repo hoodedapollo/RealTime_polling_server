@@ -90,28 +90,28 @@ int main()
                 gettimeofday(&timeval1, &timezone1);
                 if (i==0)
                 {
-                 printf("Polling server"); fflush(stdout);
-                 WCET[i] = CAPACITY;
+                        printf("Polling server"); fflush(stdout);
+                        WCET[i] = CAPACITY;
                 }
                 else
                 {
-                if (i==1)
-                        task1_code();
-                if (i==2)
-                        task2_code();
-                if (i==3)
-                        task3_code();
+                        if (i==1)
+                                task1_code();
+                        if (i==2)
+                                task2_code();
+                        if (i==3)
+                                task3_code();
 
-                //aperiodic tasks
-                if (i==4)
-                        task4_code();
-                if (i==5)
-                        task5_code();
+                        //aperiodic tasks
+                        if (i==4)
+                                task4_code();
+                        if (i==5)
+                                task5_code();
 
-                gettimeofday(&timeval2, &timezone2);
+                        gettimeofday(&timeval2, &timezone2);
 
-                WCET[i]= 1000*((timeval2.tv_sec - timeval1.tv_sec)*1000000
-                                +(timeval2.tv_usec-timeval1.tv_usec));
+                        WCET[i]= 1000*((timeval2.tv_sec - timeval1.tv_sec)*1000000
+                                        +(timeval2.tv_usec-timeval1.tv_usec));
                 }
                 printf("\nWorst Case Execution Time %d=%ld \n", i, WCET[i]); fflush(stdout);
         }
@@ -219,6 +219,25 @@ void polling_server_code()
                 }
                 else
                 {
+
+                        printf("!!!!! NOT ENOUGH CAPACITY LEFT !!!!!\n  Element left in the queue -->"); fflush(stdout);
+
+                        int i = j;
+                        while(queue[i] == TASK_4 || queue[i] == TASK_5)
+                        {
+                                if (queue[i] == TASK_4)
+                                {
+                                        printf(" 4 "); fflush(stdout);
+                                        i++;
+                                }
+
+                                if (queue[i] == TASK_5)
+                                {
+                                        printf(" 5 "); fflush(stdout);
+                                        i++;
+                                }
+                        }
+                        printf("\n"); fflush(stdout);
                         break;  // in the case there is capacity left to run the task that requires the 
                         // of computational time but the task in the queue that must be runned
                         // requires more computational time than it is available, we need to forcefully 
@@ -231,7 +250,6 @@ void polling_server_code()
         // clear the queue and initialize its indexes only if there are no more valid element in the que
         // if the capacity left in not sufficient to run more aperiodic task, then, during the next exec
         // the polling server periodic task,  you want the queue to start from the exact point it stoppe
-
 
 
         if (queue[j] != TASK_4 && queue [j] != TASK_5) // when there are no more valid element in the qu
@@ -586,24 +604,24 @@ void *task3( void *ptr)
 
 void task4_code()
 {
-        printf("4a START\n"); fflush(stdout);
+        printf("--> 4a START\n"); fflush(stdout);
         for (int i = 0; i < 10; i++)
         {
                 for (int j = 0; j < 1000; j++)
                         double uno = rand()*rand();
         }
-        printf("4a END\n"); fflush(stdout);
+        printf("--> 4a END\n"); fflush(stdout);
 }
 
 
 void task5_code()
 {
-        printf("5a START\n"); fflush(stdout);
+        printf("--> 5a START\n"); fflush(stdout);
         for (int i = 0; i < 10; i++)
         {
                 for (int j = 0; j < 1000; j++)	
                         double uno = rand()*rand();
         }	
-        printf("5a END\n"); fflush(stdout);
+        printf("--> 5a END\n"); fflush(stdout);
 }
 
