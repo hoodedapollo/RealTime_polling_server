@@ -210,7 +210,7 @@ void polling_server_code()
 
                 else if (queue[j] == TASK_5 && Capacity_left >= C_task_5)
                 {
-                        task5_code;
+                        task5_code();
 
                         j++;
 
@@ -307,7 +307,7 @@ void task1_code()
         for (int i = 0; i < 10; i++)
         {
                 for (int j = 0; j < 1000; j++)
-                        uno = rand()*rand()%10;
+                        uno = rand()%2;
         }
 
 
