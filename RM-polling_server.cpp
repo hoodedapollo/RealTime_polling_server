@@ -20,7 +20,7 @@
 #define BUFFER_SIZE 1000 // stil to be evaluated
 #define TASK_4 1
 #define TASK_5 2
-#define CAPACITY 100000000 // still to be  evaluated
+#define CAPACITY 10000000 // still to be  evaluated
 
 // application specific code
 void polling_server_code( );
@@ -99,7 +99,12 @@ int main()
                 struct timezone timezone2;
                 gettimeofday(&timeval1, &timezone1);
                 if (i==0)
-                        polling_server_code();
+                {
+                 printf("Polling server"); fflush(stdout);
+                 WCET[i] = CAPACITY;
+                }
+                else
+                {
                 if (i==1)
                         task1_code();
                 if (i==2)
@@ -117,6 +122,7 @@ int main()
 
                 WCET[i]= 1000*((timeval2.tv_sec - timeval1.tv_sec)*1000000
                                 +(timeval2.tv_usec-timeval1.tv_usec));
+                }
                 printf("\nWorst Case Execution Time %d=%ld \n", i, WCET[i]); fflush(stdout);
         }
 
