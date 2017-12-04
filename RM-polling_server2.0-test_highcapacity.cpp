@@ -492,14 +492,58 @@ void *task2( void *ptr )
 
 void task3_code()
 {
+
+        double uno;
         printf("3 START\n"); fflush(stdout);
         for (int i = 0; i < 10; i++)
         {
                 for (int j = 0; j < 1000; j++)
-                {		
-                        double uno = rand()*rand();
-                }
+                        uno = rand()%2;
         }
+
+
+        // when the random variable uno=0, then aperiodic task 4 must
+        // be executed
+
+        if (uno == 0)
+        {
+                printf("--> 4 added to queue\n");fflush(stdout);
+                pthread_mutex_lock(&mutex_queue);     // the variable queue is shared among task_1 and
+                // polling_server_task so it must be protected with a mut
+
+                queue[q] = TASK_4;                    // element of the queue "pointed" by i updated according
+                // to the arrival of a specific aperiodic task (task_4 in
+                // this case)
+
+                pthread_mutex_unlock(&mutex_queue);   // after the queue is updated we can relase the mutex in
+                // charge of protecting it
+
+                pthread_mutex_lock(&mutex_q);          // i is another variable shared between task_1 and
+                // polling_server_task and must be protected
+
+                q++;                                   // after a new tak is added to the queue we must update
+                // the i index in order to have it stil pointing to the
+                // first empty element of the queue
+                pthread_mutex_unlock(&mutex_q);
+
+        }
+
+        // when the random variable uno=1, then aperiodic task 5 must
+        // be executed
+        if (uno == 1)
+        {
+                printf("--> 5 added to queue\n");fflush(stdout);
+
+                pthread_mutex_lock(&mutex_queue);
+                queue[q] = TASK_5;
+                pthread_mutex_unlock(&mutex_queue);
+
+                pthread_mutex_lock(&mutex_q);
+                q++;
+                pthread_mutex_unlock(&mutex_q);
+
+        }
+
         printf("3 END\n"); fflush(stdout);
 }
 void *task3( void *ptr)
