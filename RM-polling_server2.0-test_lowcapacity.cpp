@@ -17,14 +17,14 @@
 #define NPERIODICTASKS 4
 #define NAPERIODICTASKS 0 
 
-#define BUFFER_SIZE 1000 // stil to be evaluated
+#define BUFFER_SIZE 1000 //  over sized in order to never get a segmentation fault 
 #define TASK_4 1
 #define TASK_5 2
-#define CAPACITY 600000 // still to be  evaluated
+#define CAPACITY 600000 // low enough to have still task in the queue when server polling 
+                        // has non capacity left
 
 // application specific code
 void polling_server_code( );
-
 void task1_code( );
 void task2_code( );
 void task3_code( );
@@ -33,7 +33,6 @@ void task5_code( );
 
 // thread functions 
 void *polling_server( void *);
-
 void *task1( void *);
 void *task2( void *);
 void *task3( void *);
@@ -43,12 +42,11 @@ pthread_mutex_t mutex_queue = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_q = PTHREAD_MUTEX_INITIALIZER;
 
 
-
-int q = 0;
-int j = 0;
-int queue[BUFFER_SIZE] = {0};
-long int C_task_4, C_task_5;
-long int Capacity = CAPACITY;
+int q = 0; // polling server queue index
+int j = 0; // task 1,2,3 queue index
+int queue[BUFFER_SIZE] = {0};  // initialize the buffer to zero
+long int C_task_4, C_task_5;   // computational times of aperiodic task 4 and  5
+long int Capacity = CAPACITY;  // server polling capacity
 
 long int periods[NTASKS];
 struct timeval next_arrival_time[NTASKS];
@@ -70,16 +68,20 @@ int main()
         struct sched_param priomin;
         priomin.sched_priority=sched_get_priority_min(SCHED_FIFO);
 
-        if (getuid() == 0) // verifies if you are superuser
-                pthread_setschedparam(pthread_self(),SCHED_FIFO,&priomax); //  set the priority of the current thread
-        //  (the main one) as the max possible. This is
-        //  done in order to measure the computational time
-        //  of the thread code in the case that the thread
-        //  has the max priority 
+// If you are superuser set the priority of the current thread (the thread main) as the max possibile.
+// This is done in order to measure the computational time of the thread code. Since it's running with
+// the highet priority it cannot preempted so the difference between the ending time istant and the
+// beginnig time istant is the computational time of the thread code  
 
-        // execute all tasks in standalone modality in order to measure execution times
-        // (use gettimeofday). Use the computed values to update the worst case execution
-        // time of each task.
+        if (getuid() == 0)                 
+        {
+                pthread_setschedparam(pthread_self(),SCHED_FIFO,&priomax);  
+        }                                                                   
+
+         
+//  Execute all tasks, one at a time and compute the difference between ending time istant and beginng 
+//  time istant. Use the computed values to update the worst case execution time of each task.
+         
 
         for (int i =0; i < NTASKS; i++)
         {
@@ -95,6 +97,8 @@ int main()
                 }
                 else
                 {
+                        // periodic tasks 
+                        
                         if (i==1)
                                 task1_code();
                         if (i==2)
@@ -102,7 +106,8 @@ int main()
                         if (i==3)
                                 task3_code();
 
-                        //aperiodic tasks
+                        // aperiodic tasks
+                        
                         if (i==4)
                                 task4_code();
                         if (i==5)
@@ -116,16 +121,16 @@ int main()
                 }
         }
 
-        C_task_4 = WCET[4];
+        C_task_4 = WCET[4];  // make the computationals time of task 4 and task5 available to the server polling
         C_task_5 = WCET[5];
 
-        double Ulub = NPERIODICTASKS*(pow(2.0,(1.0/NPERIODICTASKS)) -1);
+        double Ulub = NPERIODICTASKS*(pow(2.0,(1.0/NPERIODICTASKS)) -1);  // RM U_lub
 
         double U = 0;
         for (int i = 0; i < NPERIODICTASKS; i++)
-                U+= ((double)WCET[i])/((double)periods[i]);
+                U+= ((double)WCET[i])/((double)periods[i]);  // Actual U
 
-        if (U > Ulub)
+        if (U > Ulub) 
         {
                 printf("\n U=%lf Ulub=%lf Not schedulable\n", U, Ulub); fflush(stdout);
                 return(-1);
@@ -134,9 +139,13 @@ int main()
         fflush(stdout);
         sleep(1);
 
+// give the thread main the lowest priority so it's never going to preempt the other tasks
         if (getuid() == 0)
+        {
                 pthread_setschedparam(pthread_self(),SCHED_FIFO,&priomin);
+        }
 
+// set the threads attributes and store them in the correspondent struct        
         for (int i =0; i < NPERIODICTASKS; i++)
         {
                 pthread_attr_init(&(attributes[i]));
@@ -155,6 +164,7 @@ int main()
         struct timezone zona;
         gettimeofday(&ora, &zona);
 
+// calculate the next arrival time and initialize the missed deadlines to zero        
         for (int i = 0; i < NPERIODICTASKS; i++)
         {
                 long int periods_micro = periods[i]/1000;
@@ -163,49 +173,43 @@ int main()
                 missed_deadlines[i] = 0;
         }
 
-        // thread creation
+// thread creation
         iret[0] = pthread_create( &(thread_id[0]), &(attributes[0]), polling_server, NULL);
         iret[1] = pthread_create( &(thread_id[1]), &(attributes[1]), task1, NULL);
         iret[2] = pthread_create( &(thread_id[2]), &(attributes[2]), task2, NULL);
         iret[3] = pthread_create( &(thread_id[3]), &(attributes[3]), task3, NULL);
 
+// join all the created threads so that the thread main waits for the threads to exit before exiting itslef
         pthread_join( thread_id[0], NULL);
         pthread_join( thread_id[1], NULL);
         pthread_join( thread_id[2], NULL);
         pthread_join( thread_id[3], NULL);
 
-
         exit(0);
 }
+
 
 void polling_server_code()
 {
 
+
         printf("PS START\n"); fflush(stdout);
-        // refill the capacity at each execution of the task_polling_server
+// refill the capacity at each execution of the task_polling_server
         int Capacity_left = Capacity;
-        // As long as there are task in the queue and there is capacity left to run at least the task
-        // that requires less capacity run the task
+
+// As long as there are task in the queue 
         while (queue[j] == TASK_4 || queue [j] == TASK_5)
         {
 
-                if (queue[j] == TASK_4 && Capacity_left >=  C_task_4) // if the element in the queue is 
-                        // and there is enough capcity left to
-                        // run task_4 signal task_4 to run
-                {
+// if the element in the queue is task 4 and there is enough capcity left to run it
+                if (queue[j] == TASK_4 && Capacity_left >=  C_task_4)                {
                         task4_code();
 
-                        // increase the index of the queue, it's important to update the index of the qu
-                        // before updating the capacity left because the we can exit the loop due to con
-                        // related to both queue and capacity, but we want to know in particular if we e
-                        // due to the queue in order to initialize it so that task 1 update the queue fr
-                        // beginning of the queue. In this way we optimize the use of the queue buffer s
-
-
-                        j++;                                            // update the index of the queue
-
-                        Capacity_left = Capacity_left - C_task_4;       // reduce the capacity left acco
-                        // to task_4 computational time
+// update the index of the queue
+                        j++;
+                        
+// reduce the capacity left according to task 4 computational time
+                        Capacity_left = Capacity_left - C_task_4;    
                 }
 
                 else if (queue[j] == TASK_5 && Capacity_left >= C_task_5)
@@ -214,16 +218,21 @@ void polling_server_code()
 
                         j++;
 
-                        Capacity_left = Capacity_left - C_task_5;       // reduce the capacity left acco
-                        // to task_5 computational time
+                        Capacity_left = Capacity_left - C_task_5; 
                 }
+
+// if ther is still a valid element in the queue, but the polling server has not enough capacity left to run it 
+// to its completion                 
                 else
                 {
 
                         printf("        !!!!! NOT ENOUGH CAPACITY LEFT !!!!!\n"); fflush(stdout);          
+
+// print to stdout the valid elements left in the queue because the polling server had no capacity left to run them
+// during this execution 
                         printf("            Elements left in the queue -->"); fflush(stdout);
 
-                        int i = j;
+                        int i = j;  // starting from the current location in the queue
                         while(queue[i] == TASK_4 || queue[i] == TASK_5)
                         {
                                 if (queue[i] == TASK_4)
@@ -239,24 +248,18 @@ void polling_server_code()
                                 }
                         }
                         printf("\n"); fflush(stdout);
-                        break;  // in the case there is capacity left to run the task that requires the 
-                        // of computational time but the task in the queue that must be runned
-                        // requires more computational time than it is available, we need to forcefully 
-                        // the loop otherwise we will be stuck inside of it: there is a valid element in
-                        // queue but we cannot run it so the pointer j is never going to change neither
-                        // the capacity left is going to be updated,
+                        break;  // exit the loop 
                 }
         }
 
-        // clear the queue and initialize its indexes only if there are no more valid element in the que
-        // if the capacity left in not sufficient to run more aperiodic task, then, during the next exec
-        // the polling server periodic task,  you want the queue to start from the exact point it stoppe
-
-
-        if (queue[j] != TASK_4 && queue [j] != TASK_5) // when there are no more valid element in the qu
+// If there are no more valid element in the queue: clear the queue and initialize its indexes 
+// otherwise do nothing since, during the next execution, the polling server must strat from where
+// it left.
+        if (queue[j] != TASK_4 && queue [j] != TASK_5)
         {
 
-                // delete the queue (fill it with zeroes up to the last valid element in the queue)
+// reinitialize the queue (fill it with zeroes up to the last valid element in the queue,
+// the other elements are already zeroes)
 
                 pthread_mutex_lock(&mutex_queue);
                 for (int k = 0; k < j; k++)
@@ -265,13 +268,13 @@ void polling_server_code()
                 }
                 pthread_mutex_unlock(&mutex_queue);
 
-                // initialize the polling server queue pointer
+// initialize the polling server queue pointer
                 j = 0;
 
-                // initialize the task_1 queue pointer
-
-                pthread_mutex_lock(&mutex_q); // variable is shared between task_1 and task_polling_serv
-                // it must be protected with a mutex
+// initialize the task_1 queue pointer. It must be protected with a mutex since it is a global variable 
+// shared between task 1 and task polling server 
+                
+                pthread_mutex_lock(&mutex_q);
                 q = 0;
                 pthread_mutex_unlock(&mutex_q);
         }
@@ -330,34 +333,30 @@ void task1_code()
         }
 
 
-        // when the random variable uno=0, then aperiodic task 4 must
-        // be executed
-
+// when the random variable uno=0, then aperiodic task 4 must be executed
         if (uno == 0)
         {
                 printf("--> 4 added to queue\n");fflush(stdout);
-                pthread_mutex_lock(&mutex_queue);     // the variable queue is shared among task_1 and
-                // polling_server_task so it must be protected with a mut
+                pthread_mutex_lock(&mutex_queue);     
 
-                queue[q] = TASK_4;                    // element of the queue "pointed" by i updated according
-                // to the arrival of a specific aperiodic task (task_4 in
-                // this case)
+// update the element of the queue "pointed" by q according to the arrival of a specific aperiodic task (task_4 in this case)
+                queue[q] = TASK_4;                  
 
-                pthread_mutex_unlock(&mutex_queue);   // after the queue is updated we can relase the mutex in
-                // charge of protecting it
+                pthread_mutex_unlock(&mutex_queue);  
+               
 
-                pthread_mutex_lock(&mutex_q);          // i is another variable shared between task_1 and
+                pthread_mutex_lock(&mutex_q);          
                 // polling_server_task and must be protected
-
-                q++;                                   // after a new tak is added to the queue we must update
-                // the i index in order to have it stil pointing to the
-                // first empty element of the queue
+               
+// after a new tak is added to the queue we must update the q index in order to have it stil pointing to the first empty element of the queue
+                q++;                                   
+                
+                
                 pthread_mutex_unlock(&mutex_q);
 
         }
 
-        // when the random variable uno=1, then aperiodic task 5 must
-        // be executed
+// when the random variable uno equals 1, then aperiodic task 5 must be executed
         if (uno == 1)
         {
                 printf("--> 5 added to queue\n");fflush(stdout);
@@ -427,35 +426,30 @@ void task2_code()
                         uno = rand()%2;
         }
 
-
-        // when the random variable uno=0, then aperiodic task 4 must
-        // be executed
-
+// when the random variable uno=0, then aperiodic task 4 must be executed
         if (uno == 0)
         {
                 printf("--> 4 added to queue\n");fflush(stdout);
-                pthread_mutex_lock(&mutex_queue);     // the variable queue is shared among task_1 and
-                // polling_server_task so it must be protected with a mut
+                pthread_mutex_lock(&mutex_queue);     
 
-                queue[q] = TASK_4;                    // element of the queue "pointed" by i updated according
-                // to the arrival of a specific aperiodic task (task_4 in
-                // this case)
+// update the element of the queue "pointed" by q according to the arrival of a specific aperiodic task (task_4 in this case)
+                queue[q] = TASK_4;                  
 
-                pthread_mutex_unlock(&mutex_queue);   // after the queue is updated we can relase the mutex in
-                // charge of protecting it
+                pthread_mutex_unlock(&mutex_queue);  
+               
 
-                pthread_mutex_lock(&mutex_q);          // i is another variable shared between task_1 and
+                pthread_mutex_lock(&mutex_q);          
                 // polling_server_task and must be protected
-
-                q++;                                   // after a new tak is added to the queue we must update
-                // the i index in order to have it stil pointing to the
-                // first empty element of the queue
+               
+// after a new tak is added to the queue we must update the q index in order to have it stil pointing to the first empty element of the queue
+                q++;                                   
+                
+                
                 pthread_mutex_unlock(&mutex_q);
 
         }
 
-        // when the random variable uno=1, then aperiodic task 5 must
-        // be executed
+// when the random variable uno equals 1, then aperiodic task 5 must be executed
         if (uno == 1)
         {
                 printf("--> 5 added to queue\n");fflush(stdout);
@@ -469,6 +463,7 @@ void task2_code()
                 pthread_mutex_unlock(&mutex_q);
 
         }
+
         printf("2 END\n"); fflush(stdout);
 }
 
@@ -520,35 +515,30 @@ void task3_code()
                         uno = rand()%2;
         }
 
-
-        // when the random variable uno=0, then aperiodic task 4 must
-        // be executed
-
+// when the random variable uno=0, then aperiodic task 4 must be executed
         if (uno == 0)
         {
                 printf("--> 4 added to queue\n");fflush(stdout);
-                pthread_mutex_lock(&mutex_queue);     // the variable queue is shared among task_1 and
-                // polling_server_task so it must be protected with a mut
+                pthread_mutex_lock(&mutex_queue);     
 
-                queue[q] = TASK_4;                    // element of the queue "pointed" by i updated according
-                // to the arrival of a specific aperiodic task (task_4 in
-                // this case)
+// update the element of the queue "pointed" by q according to the arrival of a specific aperiodic task (task_4 in this case)
+                queue[q] = TASK_4;                  
 
-                pthread_mutex_unlock(&mutex_queue);   // after the queue is updated we can relase the mutex in
-                // charge of protecting it
+                pthread_mutex_unlock(&mutex_queue);  
+               
 
-                pthread_mutex_lock(&mutex_q);          // i is another variable shared between task_1 and
+                pthread_mutex_lock(&mutex_q);          
                 // polling_server_task and must be protected
-
-                q++;                                   // after a new tak is added to the queue we must update
-                // the i index in order to have it stil pointing to the
-                // first empty element of the queue
+               
+// after a new tak is added to the queue we must update the q index in order to have it stil pointing to the first empty element of the queue
+                q++;                                   
+                
+                
                 pthread_mutex_unlock(&mutex_q);
 
         }
 
-        // when the random variable uno=1, then aperiodic task 5 must
-        // be executed
+// when the random variable uno equals 1, then aperiodic task 5 must be executed
         if (uno == 1)
         {
                 printf("--> 5 added to queue\n");fflush(stdout);
@@ -562,6 +552,7 @@ void task3_code()
                 pthread_mutex_unlock(&mutex_q);
 
         }
+
 
         printf("3 END\n"); fflush(stdout);
 }
