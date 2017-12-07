@@ -98,7 +98,7 @@ int main()
                 else
                 {
                         // periodic tasks 
-                        
+
                         if (i==1)
                                 task1_code();
                         if (i==2)
@@ -107,7 +107,7 @@ int main()
                                 task3_code();
 
                         // aperiodic tasks
-                        
+
                         if (i==4)
                                 task4_code();
                         if (i==5)
@@ -117,12 +117,15 @@ int main()
 
                         WCET[i]= 1000*((timeval2.tv_sec - timeval1.tv_sec)*1000000
                                         +(timeval2.tv_usec-timeval1.tv_usec));
-                        printf("\nTask %d Worst Case Execution Time = %ld \n", i, WCET[i]); fflush(stdout);
+
+
                 }
+
+                printf("\nTask %d Worst Case Execution Time = %ld \n", i, WCET[i]); fflush(stdout);
         }
 
-        C_task_4 = WCET[4];  // make the computationals time of task 4 and task5 available to the server polling
-        C_task_5 = WCET[5];
+                C_task_4 = WCET[4];  // make the computationals time of task 4 and task5 available to the server polling
+                C_task_5 = WCET[5];
 
         double Ulub = NPERIODICTASKS*(pow(2.0,(1.0/NPERIODICTASKS)) -1);  // RM U_lub
 
