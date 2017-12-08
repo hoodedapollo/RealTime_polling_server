@@ -1,8 +1,15 @@
-// Three periodsc threads with rate monotonic, two aperiodsc threads 
-/***********************************************
- * compile with g++ -lpthread RMaperiodsci.cpo
- ************************************************/
-
+/*************************************************************************************************
+*
+*  Four periodc threads scheduled with rate monotonic, two aperiodc tasks (no threads).
+*  The polling server is the periodic task with the highest priority among all periodic
+*  tasks, it is in charge of the scheduling of the aperiodic tasks in a FIFO fashion.
+*  The polling server schedules an aperiodic task as long as it has enough capacity left
+*  to run it completly, otherwise it waits till its next arrival time to schedule it.
+*  To estimate the worst execution time of each task, the thread main run its code 10 times
+*  and take the maximum computational time.
+*  A circular queue is implemented in order to manage multiple arrival of aperiodic a tasks.
+*
+**************************************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,11 +24,11 @@
 #define NPERIODICTASKS 4
 #define NAPERIODICTASKS 0 
 
-#define BUFFER_SIZE 1000 //  over sized in order to never get a segmentation fault 
+#define BUFFER_SIZE 1000 //  over sized in order to never get a segmentation fault - to be optimized
 #define TASK_4 1
 #define TASK_5 2
-#define CAPACITY 1500000 // low enough to have still task in the queue when server polling 
-                        // has non capacity left
+#define CAPACITY 800000 // low enough to have still task in the queue when server polling 
+                         // has non capacity left
 
 // application specific code
 void polling_server_code( );
@@ -43,7 +50,7 @@ pthread_mutex_t mutex_q = PTHREAD_MUTEX_INITIALIZER;
 
 
 int q = 0; // polling server queue index
-int j = 0; // task 1,2,3 queue index
+int h = 0; // task 1,2,3 queue index
 int queue[BUFFER_SIZE] = {0};  // initialize the buffer to zero
 long int C_task_4, C_task_5;   // computational times of aperiodic task 4 and  5
 long int Capacity = CAPACITY;  // server polling capacity
@@ -223,25 +230,25 @@ void polling_server_code()
         int Capacity_left = Capacity;
 
 // As long as there are task in the queue 
-        while (queue[j] == TASK_4 || queue [j] == TASK_5)
+        while (queue[h] == TASK_4 || queue [h] == TASK_5)
         {
 
 // if the element in the queue is task 4 and there is enough capcity left to run it
-                if (queue[j] == TASK_4 && Capacity_left >=  C_task_4)                {
+                if (queue[h] == TASK_4 && Capacity_left >=  C_task_4)                {
                         task4_code();
 
 // update the index of the queue
-                        j++;
+                        h++;
                         
 // reduce the capacity left according to task 4 computational time
                         Capacity_left = Capacity_left - C_task_4;    
                 }
 
-                else if (queue[j] == TASK_5 && Capacity_left >= C_task_5)
+                else if (queue[h] == TASK_5 && Capacity_left >= C_task_5)
                 {
                         task5_code();
 
-                        j++;
+                        h++;
 
                         Capacity_left = Capacity_left - C_task_5; 
                 }
@@ -257,7 +264,7 @@ void polling_server_code()
 // during this execution 
                         printf("    |        Elements left in the queue -->"); fflush(stdout);
 
-                        int i = j;  // starting from the current location in the queue
+                        int i = h;  // starting from the current location in the queue
                         while(queue[i] == TASK_4 || queue[i] == TASK_5)
                         {
                                 if (queue[i] == TASK_4)
@@ -277,28 +284,27 @@ void polling_server_code()
                 }
         }
 
-// If there are no more valid element in the queue: clear the queue and initialize its indexes 
+// If there are no more valid elements in the queue: clear the queue and initialize its indexes 
 // otherwise do nothing since, during the next execution, the polling server must strat from where
 // it left.
-        if (queue[j] != TASK_4 && queue [j] != TASK_5)
+        if (queue[h] != TASK_4 && queue[h] != TASK_5)
         {
 
 // reinitialize the queue (fill it with zeroes up to the last valid element in the queue,
 // the other elements are already zeroes)
 
                 pthread_mutex_lock(&mutex_queue);
-                for (int k = 0; k < j; k++)
+                for (int k = 0; k < h; k++)
                 {
                         queue[k] = 0;
                 }
                 pthread_mutex_unlock(&mutex_queue);
 
 // initialize the polling server queue pointer
-                j = 0;
+                h = 0;
 
 // initialize the task_1 queue pointer. It must be protected with a mutex since it is a global variable 
 // shared between task 1 and task polling server 
-                
                 pthread_mutex_lock(&mutex_q);
                 q = 0;
                 pthread_mutex_unlock(&mutex_q);
