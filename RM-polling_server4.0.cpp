@@ -220,8 +220,13 @@ int main()
                 next_arrival_time[i].tv_usec = ora.tv_usec + periods_micro%1000000;
                 missed_deadlines[i] = 0;
         }
-
-// thread creation
+// before the creation of threads, reset the toggle to COMPLETED in order to undo what happened
+// during the execution of threads code in order to exstimate the worst execution time
+        pthread_mutex_lock(&mutex_toggle);
+        toggle = COMPLETED;
+        pthread_mutex_unlock(&mutex_toggle);
+        
+// create tasks
         iret[0] = pthread_create( &(thread_id[0]), &(attributes[0]), polling_server, NULL);
         iret[1] = pthread_create( &(thread_id[1]), &(attributes[1]), task1, NULL);
         iret[2] = pthread_create( &(thread_id[2]), &(attributes[2]), task2, NULL);
@@ -240,67 +245,78 @@ int main()
 
 void polling_server_code()
 {
+        struct timespec ora;
         struct timespec Capacity;
-        Capacity.tv_sec = 100;
-        Capacity.tv_nsec = CAPACITY;
 
-        pthread_mutex_lock(&mutex_printf);
-        printf("    PS START\n    |\n"); fflush(stdout);
-        pthread_mutex_unlock(&mutex_printf);
-
-// set the priority of the aperiodic task 4 as the second maximum possible (second only to the polling
-// server so it can not be preempted by the periodic  tasks, but only by the polling server.
-        if (getuid() == 0)
+// if the aperiodic task has neither just arrived nor stopped by the polling server, the polling server 
+// should immediatetly release the CPU 
+        if (toggle != ARRIVED && toggle != STOPPED)
         {
-                pthread_setschedprio(thread_id[4], priomax.sched_priority - 1);
+                printf("    PS START-NoTask\n    |\n"); fflush(stdout);
+                printf("    |\n    PS END-NoTask\n"); fflush(stdout);
         }
-// if the aperiod thread is just arrived then signal the condition variable to let it start
-// from the beginnig         
-        if (toggle == ARRIVED)
+        
+        if (toggle == ARRIVED || toggle == STOPPED)
         {
+                // get the time of the day with nanosecond precision and store it in ora
+                clock_gettime(CLOCK_REALTIME, &ora);
+
+                // define the capacity as the absolute time at which the capacity is going to expire
+                Capacity.tv_sec = ora.tv_sec;
+                Capacity.tv_nsec = ora.tv_nsec + CAPACITY;
+
+                pthread_mutex_lock(&mutex_printf);
+                printf("    PS START\n    |\n"); fflush(stdout);
+                pthread_mutex_unlock(&mutex_printf);
+
+                // set the priority of the aperiodic task 4 as the second maximum possible (second only to the polling
+                // server so it can not be preempted by the periodic  tasks, but only by the polling server.
+                if (getuid() == 0)
+                {
+                        pthread_setschedprio(thread_id[4], priomax.sched_priority - 1);
+                }
+
+                // release the mutex on which the aperiodic task is waiting by sending the corresponding condition signal                  
                 pthread_mutex_lock(&mutex_task_4);
                 pthread_cond_signal(&cond_task_4);
                 pthread_mutex_unlock(&mutex_task_4);
+
+                // make the server wait so the aperiodic thread can run wheter it is just arrived or it was stopped
+                // during its execution by the previous execution of the polling server.       
+                // wait time must be specified in absolute time not relative time so you must add the actual time wiith
+                // clock_gettime since it has nanosecond precision.
+                pthread_mutex_lock(&mutex_stop_task_4);
+                int timedwait_ret = pthread_cond_timedwait(&cond_stop_task_4,&mutex_stop_task_4,&Capacity);
+                //        printf("timedwait return value %d\n", timedwait_ret); fflush(stdout);  // debug printf 
+
+                // debug line to test if the polling server realse the CPU while waiting 
+                // pthread_cond_wait(&cond_stop_task_4,&mutex_stop_task_4);
+
+                pthread_mutex_unlock(&mutex_stop_task_4);
+
+                // if the waiting time expired before the aperiodic task was completed set the toggle accordingly
+                // so the next time the polling server runs it will not make the aperiodic thread start from the beginning        
+                if ( toggle != COMPLETED)
+                {
+                        pthread_mutex_lock(&mutex_toggle);
+                        toggle = STOPPED;
+                        pthread_mutex_unlock(&mutex_toggle);
+                }
+
+                // set the priority of the aperiodic task as the lowest possible so it cannot preempt the periodic tasks 
+                // ( actually in this way if none of the periodic tasks needs the processor it still can be scheduled in
+                // a background fashion. For this reason we are looking for something that actually prevent the thread
+                // from running unless we give it a priority. we are looking for a command that makes it unschedulable 
+                // until we assingn it its priority as the second maximum one.
+                if (getuid() == 0)
+                {
+                        pthread_setschedprio(thread_id[4], priomin.sched_priority);
+                }
+
+                pthread_mutex_lock(&mutex_printf);
+                printf("    |\n    PS END\n"); fflush(stdout);
+                pthread_mutex_unlock(&mutex_printf);
         }
-
-// make the server wait so the aperiodic thread can run wheter it is just arrived or it was stopped
-// during its execution by the previous execution of the polling server       
-//
-// PROBLEM ?????????????????????? pthread_cond_timedwait is not waiting WTF???
-// wait time must be specified in absolute time not relative time so you must add the actual time wiith
-// get time of day
-        pthread_mutex_lock(&mutex_stop_task_4);
-        int timedwait_ret = pthread_cond_timedwait(&cond_stop_task_4,&mutex_stop_task_4,&Capacity);
-        perror("timedwait");
-        printf("timedwait return value %d\n", timedwait_ret); fflush(stdout);
-        
-// debug line to test if the polling server realse the CPU while waiting 
-// pthread_cond_wait(&cond_stop_task_4,&mutex_stop_task_4);
-                                                            
-        pthread_mutex_unlock(&mutex_stop_task_4);
-
-// if the waiting time expired before the aperiodic task was completed set the toggle accordingly
-// so the next time the polling server runs it will not make the aperiodic thread start from the beginning        
-        if ( toggle != COMPLETED)
-        {
-                pthread_mutex_lock(&mutex_toggle);
-                toggle = STOPPED;
-                pthread_mutex_unlock(&mutex_toggle);
-        }
-
-// set the priority of the aperiodic task as the lowest possible so it cannot preempt the periodic tasks 
-// ( actually in this way if none of the periodic tasks needs the processor it still can be scheduled in
-// a background fashion. For this reason we are looking for something that actually prevent the thread
-// from running unless we give it a priority. we are looking for a command that makes it unschedulable 
-// until we assingn it its priority as the second maximum one.
-        if (getuid() == 0)
-        {
-                pthread_setschedprio(thread_id[4], priomin.sched_priority);
-        }
-
-        pthread_mutex_lock(&mutex_printf);
-        printf("    |\n    PS END\n"); fflush(stdout);
-        pthread_mutex_unlock(&mutex_printf);
 }        
 
 
@@ -352,13 +368,16 @@ void task1_code()
                 for (int j = 0; j < 1000; j++)
                         uno = rand()%10;
         }
-
+// if uno == 0 an aperioc task has arrived
         if (uno == 0)
         {
                   printf("            |--> 4a arrival\n");fflush(stdout);
+                  
+// when the aperiodic task arrives set the toggle accordingly                   
                   pthread_mutex_lock(&mutex_toggle);
                   toggle = ARRIVED;
                   pthread_mutex_unlock(&mutex_toggle);
+
         }
          printf("            |\n            1 END\n\n"); fflush(stdout);
 }
